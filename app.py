@@ -4,17 +4,26 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
+# Загрузка переменных окружения
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Инициализация Flask-приложения
 app = Flask(__name__)
 CORS(app)
 
+# Корневой маршрут для проверки работоспособности
+@app.route('/')
+def index():
+    return "Lazy GPT API is running. Use POST /ask."
+
+# Основной маршрут /ask
 @app.route('/ask', methods=['POST'])
 def ask():
     data = request.get_json()
     user_input = data.get("prompt", "")
     print("Получен запрос:", user_input)
+
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
 
@@ -38,6 +47,6 @@ def ask():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Запуск сервера (обязательно host=0.0.0.0 для Render)
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
-
