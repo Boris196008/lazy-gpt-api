@@ -32,7 +32,7 @@ def index():
 
 # Основной маршрут (POST /ask)
 @app.route('/ask', methods=['POST'])
-@limiter.limit("1 per minute")
+@limiter.limit("1 per minute", key_func=lambda: request.cookies.get("session_id", request.remote_addr))
 def ask():
     data = request.get_json()
     user_input = data.get("prompt", "")
