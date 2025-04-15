@@ -7,38 +7,50 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# Загрузка .env (для локального запуска)
+# Загружаем .env (локально)
 load_dotenv()
-
-# Инициализация OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Flask-приложение
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # ✅ обязательно для куки
+CORS(app, supports_credentials=True)  # 🔑 важно для куки
 
-# Ограничение: 1 запрос в минуту на IP
-limiter = Limiter(get_remote_address, app=app, default_limits=["1 per minute"])
+# Функция, определяющая “ключ” пользователя для лимита
+def get_user_identifier():
+    session_id = request.cookies.get("session_id")
+    if session_id:
+        print(f"→ Лимит по session_id: {session_id}")
+        return session_id
+    ip = get_remote_address()
+    print(f"→ Лимит по IP: {ip}")
+    return ip
 
-# Обработчик превышения лимита
+# Настройка лимитера
+limiter = Limiter(
+    key_func=get_user_identifier,
+    app=app,
+    default_limits=["1 per minute"]
+)
+
 @app.errorhandler(RateLimitExceeded)
 def handle_rate_limit(e):
-    return jsonify({"error": "429 Too Many Requests: 1 per minute"}), 429
+    return jsonify({"error": "🚫 Лимит: не чаще 1 раза в минуту."}), 429
 
-# Корневой маршрут (GET)
 @app.route('/')
 def index():
     return "Lazy GPT API is running. Use POST /ask."
 
-# Основной маршрут (POST /ask)
 @app.route('/ask', methods=['POST'])
-@limiter.limit("1 per minute", key_func=lambda: request.cookies.get("session_id", request.remote_addr))
+@limiter.limit("1 per minute", key_func=get_user_identifier)
 def ask():
     data = request.get_json()
     user_input = data.get("prompt", "")
 
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
+
+    # Логируем, как нас идентифицируют
+    print("session_id:", request.cookies.get("session_id"))
+    print("remote_addr:", request.remote_addr)
 
     system_prompt = (
         "Ты — ленивый, но гениальный AI. Пользователь пишет всего одну фразу, "
@@ -60,7 +72,6 @@ def ask():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Запуск (универсально — для Render и локально)
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
