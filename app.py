@@ -15,7 +15,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Flask-приложение
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)  # ✅ обязательно для куки
 
 # Ограничение: 1 запрос в минуту на IP
 limiter = Limiter(get_remote_address, app=app, default_limits=["1 per minute"])
