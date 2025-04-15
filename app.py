@@ -5,11 +5,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_limiter.errors import RateLimitExceeded
-
-@app.errorhandler(RateLimitExceeded)
-def handle_rate_limit(e):
-    return jsonify({"error": "429 Too Many Requests: 1 per minute"}), 429
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -57,5 +52,11 @@ def ask():
         return jsonify({"error": str(e)}), 500
 
 # Запуск сервера (обязательно host=0.0.0.0 для Render)
+from flask_limiter.errors import RateLimitExceeded
+
+@app.errorhandler(RateLimitExceeded)
+def handle_rate_limit(e):
+    return jsonify({"error": "429 Too Many Requests: 1 per minute"}), 429
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
