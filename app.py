@@ -21,8 +21,8 @@ def index():
     return "Lazy GPT API is running. Use POST /ask."
 
 # Основной маршрут /ask
-@limiter.limit("1 per minute")
 @app.route('/ask', methods=['POST'])
+@limiter.limit("1 per minute")
 def ask():
     data = request.get_json()
     user_input = data.get("prompt", "")
