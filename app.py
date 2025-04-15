@@ -1,32 +1,41 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_limiter.errors import RateLimitExceeded
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 
-# Загрузка переменных окружения
+# Загрузка .env (для локального запуска)
 load_dotenv()
+
+# Инициализация OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Инициализация Flask-приложения
+# Flask-приложение
 app = Flask(__name__)
-limiter = Limiter(get_remote_address, app=app, default_limits=["1 per minute"])
 CORS(app)
 
-# Корневой маршрут для проверки работоспособности
+# Ограничение: 1 запрос в минуту на IP
+limiter = Limiter(get_remote_address, app=app, default_limits=["1 per minute"])
+
+# Обработчик превышения лимита
+@app.errorhandler(RateLimitExceeded)
+def handle_rate_limit(e):
+    return jsonify({"error": "429 Too Many Requests: 1 per minute"}), 429
+
+# Корневой маршрут (GET)
 @app.route('/')
 def index():
     return "Lazy GPT API is running. Use POST /ask."
 
-# Основной маршрут /ask
+# Основной маршрут (POST /ask)
 @app.route('/ask', methods=['POST'])
 @limiter.limit("1 per minute")
 def ask():
     data = request.get_json()
     user_input = data.get("prompt", "")
-    print("Получен запрос:", user_input)
 
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
@@ -51,12 +60,7 @@ def ask():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Запуск сервера (обязательно host=0.0.0.0 для Render)
-from flask_limiter.errors import RateLimitExceeded
-
-@app.errorhandler(RateLimitExceeded)
-def handle_rate_limit(e):
-    return jsonify({"error": "429 Too Many Requests: 1 per minute"}), 429
-
+# Запуск (универсально — для Render и локально)
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
