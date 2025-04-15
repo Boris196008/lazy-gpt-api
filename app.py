@@ -3,6 +3,9 @@ from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -10,6 +13,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Инициализация Flask-приложения
 app = Flask(__name__)
+limiter = Limiter(get_remote_address, app=app, default_limits=["1 per minute"])
 CORS(app)
 
 # Корневой маршрут для проверки работоспособности
@@ -18,6 +22,7 @@ def index():
     return "Lazy GPT API is running. Use POST /ask."
 
 # Основной маршрут /ask
+@limiter.limit("1 per minute")
 @app.route('/ask', methods=['POST'])
 def ask():
     data = request.get_json()
