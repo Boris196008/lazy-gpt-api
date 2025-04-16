@@ -18,10 +18,14 @@ CORS(app, supports_credentials=True)
 # 🛡️ Отказ от запросов без session_id
 @app.before_request
 def reject_if_no_session():
+    if request.method == "OPTIONS":
+        return  # 🔁 Пропускаем CORS-preflight
+
     if request.path == '/ask':
         if not request.cookies.get("session_id"):
             print("❌ Отклонено: нет session_id", file=sys.stdout, flush=True)
             return jsonify({"error": "Запрос без session_id запрещён."}), 403
+
 
 # 🔑 Ключ лимита
 def get_user_identifier():
