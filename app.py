@@ -30,18 +30,14 @@ def reject_invalid_token():
 def index():
     return "Lazy GPT API is running. Use POST /ask or /followup."
 
-# 🔒 Ограниченный маршрут: первый запрос
 @app.route('/ask', methods=['POST'])
 @limiter.limit("1 per minute", key_func=lambda: request.get_json(force=True).get("session_id", "no-session"))
 def ask():
     return handle_request(request.get_json(), first=True)
 
-# 🚪 Безлимитный маршрут: follow-up кнопки
 @app.route('/followup', methods=['POST'])
 def followup():
     return handle_request(request.get_json(), first=False)
-
-# 🔁 Общая логика генерации ответа
 
 def handle_request(data, first):
     user_input = data.get("prompt", "")
@@ -50,12 +46,16 @@ def handle_request(data, first):
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
 
+    # 💡 Генерация system_prompt по action
     if action == "rephrase":
         system_prompt = "Перефразируй следующий текст, сделай его более ясным, но сохрани суть:"
     elif action == "personalize":
         system_prompt = "Сделай этот текст более личным и тёплым, обращённым к конкретному человеку:"
     elif action == "shakespeare":
         system_prompt = "Преобразуй этот текст в стиль Вильяма Шекспира:"
+    elif action and action.startswith("custom:"):
+        custom_instruction = action.replace("custom:", "", 1).strip()
+        system_prompt = f"Преобразуй этот текст по следующему описанию: {custom_instruction}"
     else:
         system_prompt = (
             "Ты — ленивый, но гениальный AI. Пользователь пишет всего одну фразу, "
@@ -73,7 +73,31 @@ def handle_request(data, first):
             ]
         )
         answer = response.choices[0].message.content
-        return jsonify({"response": answer})
+
+        suggestions = []
+        if first and not action:
+            followup_prompt = (
+                "На основе следующего ответа предложи 3 коротких follow-up действия для продолжения разговора. "
+                "Ответь строго в JSON формате: [{\"label\": ..., \"action\": ...}, ...]. "
+                "Действия должны быть разнообразны по стилю.\n\nОтвет:\n" + answer
+            )
+
+            followup = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "Ты помощник, который помогает придумать follow-up действия."},
+                    {"role": "user", "content": followup_prompt}
+                ]
+            )
+
+            import json
+            try:
+                suggestions = json.loads(followup.choices[0].message.content)
+            except:
+                suggestions = []
+
+        return jsonify({"response": answer, "suggestions": suggestions})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
