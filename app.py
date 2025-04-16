@@ -106,20 +106,18 @@ def handle_request(data, first):
             raw = followup.choices[0].message.content.strip()
             print("🔁 Follow-up raw:", raw, flush=True)
 
-            if "```" in raw:
-                raw = raw.split("```")[-2].strip()
+if "```" in raw:
+    raw = raw.split("```")[-2].strip()
 
-            try:
-                parsed = json.loads(raw)
-                if isinstance(parsed, list):
-                    suggestions = parsed
-            except:
-                suggestions = []
-
-        return jsonify({"response": answer, "suggestions": suggestions})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+try:
+    parsed = json.loads(raw)
+    print("✅ Parsed follow-up JSON:", parsed, flush=True)
+    if isinstance(parsed, list):
+        suggestions = parsed
+    else:
+        print("⚠️ Parsed data is not a list", flush=True)
+except Exception as e:
+    print(f"❌ JSON parse error: {e}", flush=True)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
