@@ -6,20 +6,24 @@ from flask_limiter.errors import RateLimitExceeded
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-import sys  # ← для немедленного вывода логов
+import sys
 
-# Немедленный вывод логов
 sys.stdout.reconfigure(line_buffering=True)
-
-# Загрузка переменных окружения
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Инициализация Flask
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-# 🔑 Ключ для идентификации пользователя (лимит)
+# 🛡️ Отказ от запросов без session_id
+@app.before_request
+def reject_if_no_session():
+    if request.path == '/ask':
+        if not request.cookies.get("session_id"):
+            print("❌ Отклонено: нет session_id", file=sys.stdout, flush=True)
+            return jsonify({"error": "Запрос без session_id запрещён."}), 403
+
+# 🔑 Ключ лимита
 def get_user_identifier():
     session_id = request.cookies.get("session_id")
     if session_id:
@@ -29,7 +33,6 @@ def get_user_identifier():
     print(f"→ Лимит по IP: {ip}", file=sys.stdout, flush=True)
     return ip
 
-# Настройка лимитера
 limiter = Limiter(
     key_func=get_user_identifier,
     app=app,
