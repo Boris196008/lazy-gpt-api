@@ -5,8 +5,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import sys
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from flask_limiter.errors import RateLimitExceeded
 
 sys.stdout.reconfigure(line_buffering=True)
 load_dotenv()
@@ -15,12 +13,11 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 Ключ для лимита по session_id
 limiter = Limiter(key_func=lambda: request.get_json(force=True).get("session_id", "no-session"), app=app)
 
 @app.before_request
 def reject_invalid_token():
-    if request.path == "/ask" and request.method == "POST":
+    if request.path in ["/ask", "/followup"] and request.method == "POST":
         try:
             data = request.get_json(force=True)
             if data.get("js_token") != "genuine-human":
@@ -31,23 +28,28 @@ def reject_invalid_token():
 
 @app.route('/')
 def index():
-    return "Lazy GPT API is running. Use POST /ask."
+    return "Lazy GPT API is running. Use POST /ask or /followup."
 
+# 🔒 Ограниченный маршрут: первый запрос
 @app.route('/ask', methods=['POST'])
 @limiter.limit("1 per minute", key_func=lambda: request.get_json(force=True).get("session_id", "no-session"))
 def ask():
-    data = request.get_json()
+    return handle_request(request.get_json(), first=True)
+
+# 🚪 Безлимитный маршрут: follow-up кнопки
+@app.route('/followup', methods=['POST'])
+def followup():
+    return handle_request(request.get_json(), first=False)
+
+# 🔁 Общая логика генерации ответа
+
+def handle_request(data, first):
     user_input = data.get("prompt", "")
     action = data.get("action")
 
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
 
-    if action:
-        # отключаем лимит для follow-up действий
-        ask._rate_limit_exempt = True
-
-    # 🧠 Генерация system prompt в зависимости от действия
     if action == "rephrase":
         system_prompt = "Перефразируй следующий текст, сделай его более ясным, но сохрани суть:"
     elif action == "personalize":
