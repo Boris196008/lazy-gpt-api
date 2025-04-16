@@ -14,23 +14,20 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 Берём session_id из тела запроса
+# 🔑 Ключ для лимита по session_id
 def get_user_identifier():
     try:
-        data = request.get_json(force=True)
-        sid = data.get("session_id")
+        sid = request.get_json(force=True).get("session_id")
         if sid:
             print(f"→ Лимит по session_id: {sid}", file=sys.stdout, flush=True)
             return sid
-        print("❌ session_id отсутствует", file=sys.stdout, flush=True)
         return "no-session"
     except:
-        print("❌ Ошибка при чтении session_id", file=sys.stdout, flush=True)
         return "error"
 
-# 💥 Блокируем запросы без session_id
+# 💥 Проверка на js_token
 @app.before_request
-def reject_if_missing_token():
+def reject_invalid_token():
     if request.path == "/ask" and request.method == "POST":
         try:
             data = request.get_json(force=True)
@@ -40,7 +37,7 @@ def reject_if_missing_token():
         except:
             return jsonify({"error": "Malformed request"}), 403
 
-# 🔒 Лимит
+# ⚙️ Лимитер
 limiter = Limiter(
     key_func=get_user_identifier,
     app=app,
@@ -61,16 +58,25 @@ def index():
 def ask():
     data = request.get_json()
     user_input = data.get("prompt", "")
+    action = data.get("action", None)
 
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
 
-    system_prompt = (
-        "Ты — ленивый, но гениальный AI. Пользователь пишет всего одну фразу, "
-        "и ты сразу создаешь идеальный, законченный, красиво оформленный ответ. "
-        "Не задавай уточняющих вопросов. Просто выдай готовый результат.\n"
-        f"Вот запрос: {user_input}"
-    )
+    # 🧠 Генерация system prompt в зависимости от действия
+    if action == "rephrase":
+        system_prompt = "Перефразируй следующий текст, сделай его более ясным, но сохрани суть:"
+    elif action == "personalize":
+        system_prompt = "Сделай этот текст более личным и тёплым, обращённым к конкретному человеку:"
+    elif action == "shakespeare":
+        system_prompt = "Преобразуй этот текст в стиль Вильяма Шекспира:"
+    else:
+        system_prompt = (
+            "Ты — ленивый, но гениальный AI. Пользователь пишет всего одну фразу, "
+            "и ты сразу создаешь идеальный, законченный, красиво оформленный ответ. "
+            "Не задавай уточняющих вопросов. Просто выдай готовый результат.\n"
+            f"Вот запрос: {user_input}"
+        )
 
     try:
         response = client.chat.completions.create(
