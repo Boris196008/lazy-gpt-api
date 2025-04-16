@@ -106,11 +106,14 @@ def handle_request(data, first):
             raw = followup.choices[0].message.content.strip()
             print("🔁 Follow-up raw:", raw, flush=True)
 
-            # Удаление markdown обёртки ```json ... ```
+            # Удаление markdown обёртки ```...``` и префикса json
             if "```" in raw:
                 parts = raw.split("```")
                 if len(parts) >= 2:
                     raw = parts[1].strip()
+
+            if raw.startswith("json"):
+                raw = raw[4:].strip()
 
             print("🧼 Cleaned raw for JSON parsing:", repr(raw), flush=True)
 
