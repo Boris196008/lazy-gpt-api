@@ -30,15 +30,15 @@ def get_user_identifier():
 
 # 💥 Блокируем запросы без session_id
 @app.before_request
-def reject_if_no_session_id():
+def reject_if_missing_token():
     if request.path == "/ask" and request.method == "POST":
         try:
             data = request.get_json(force=True)
-            sid = data.get("session_id")
-            if not sid:
-                return jsonify({"error": "session_id отсутствует"}), 403
+            if data.get("js_token") != "genuine-human":
+                print("🛑 Бот без js_token — отклонено", flush=True)
+                return jsonify({"error": "Bot detected — invalid token"}), 403
         except:
-            return jsonify({"error": "Ошибка в теле запроса"}), 403
+            return jsonify({"error": "Malformed request"}), 403
 
 # 🔒 Лимит
 limiter = Limiter(
