@@ -89,8 +89,12 @@ def handle_request(data, first):
                 ]
             )
 
-            raw = followup.choices[0].message.content
+            raw = followup.choices[0].message.content.strip()
             print("🔁 Follow-up raw:", raw, flush=True)
+
+            # Очистка markdown-обёртки
+            if "```" in raw:
+                raw = raw.split("```")[-2].strip()
 
             try:
                 suggestions = json.loads(raw)
