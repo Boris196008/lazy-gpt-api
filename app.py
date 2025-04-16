@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import sys
 from flask_limiter import Limiter
+import json
 
 sys.stdout.reconfigure(line_buffering=True)
 load_dotenv()
@@ -46,7 +47,6 @@ def handle_request(data, first):
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
 
-    # 💡 Генерация system_prompt по action
     if action == "rephrase":
         system_prompt = "Перефразируй следующий текст, сделай его более ясным, но сохрани суть:"
     elif action == "personalize":
@@ -77,9 +77,8 @@ def handle_request(data, first):
         suggestions = []
         if first and not action:
             followup_prompt = (
-                "На основе следующего ответа предложи 3 коротких follow-up действия для продолжения разговора. "
-                "Ответь строго в JSON формате: [{\"label\": ..., \"action\": ...}, ...]. "
-                "Действия должны быть разнообразны по стилю.\n\nОтвет:\n" + answer
+                "На основе следующего ответа предложи 3 follow-up действия в виде кнопок. "
+                "Ответь только JSON-массивом без пояснений и без текста вокруг. Пример: [{\"label\": \"...\", \"action\": \"...\"}]\n\nОтвет:\n" + answer
             )
 
             followup = client.chat.completions.create(
@@ -90,9 +89,11 @@ def handle_request(data, first):
                 ]
             )
 
-            import json
+            raw = followup.choices[0].message.content
+            print("🔁 Follow-up raw:", raw, flush=True)
+
             try:
-                suggestions = json.loads(followup.choices[0].message.content)
+                suggestions = json.loads(raw)
             except:
                 suggestions = []
 
