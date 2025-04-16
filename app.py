@@ -1,11 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_limiter import Limiter
-from flask_limiter.errors import RateLimitExceeded
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import sys
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 sys.stdout.reconfigure(line_buffering=True)
 load_dotenv()
@@ -15,17 +15,8 @@ app = Flask(__name__)
 CORS(app)
 
 # 🔑 Ключ для лимита по session_id
-def get_user_identifier():
-    try:
-        sid = request.get_json(force=True).get("session_id")
-        if sid:
-            print(f"→ Лимит по session_id: {sid}", file=sys.stdout, flush=True)
-            return sid
-        return "no-session"
-    except:
-        return "error"
+limiter = Limiter(key_func=lambda: request.get_json(force=True).get("session_id", "no-session"), app=app)
 
-# 💥 Проверка на js_token
 @app.before_request
 def reject_invalid_token():
     if request.path == "/ask" and request.method == "POST":
@@ -37,31 +28,27 @@ def reject_invalid_token():
         except:
             return jsonify({"error": "Malformed request"}), 403
 
-# ⚙️ Лимитер
-limiter = Limiter(
-    key_func=get_user_identifier,
-    app=app,
-    default_limits=["1 per minute"]
-)
-
-@app.errorhandler(RateLimitExceeded)
-def handle_rate_limit(e):
-    print("🚫 Ограничение сработало — 429", file=sys.stdout, flush=True)
-    return jsonify({"error": "🚫 Лимит: не чаще 1 раза в минуту."}), 429
-
 @app.route('/')
 def index():
     return "Lazy GPT API is running. Use POST /ask."
 
 @app.route('/ask', methods=['POST'])
-@limiter.limit("1 per minute", key_func=get_user_identifier)
 def ask():
     data = request.get_json()
     user_input = data.get("prompt", "")
-    action = data.get("action", None)
+    action = data.get("action")
+    session_id = data.get("session_id")
 
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
+
+    # ⏱️ Проверяем лимит только на первый запрос (без action)
+    if not action:
+        from flask_limiter.util import get_remote_address
+        key = session_id or get_remote_address()
+        if not limiter.hit("ask", key):
+            print("🚫 Лимит на первый запрос", flush=True)
+            return jsonify({"error": "🚫 Лимит: не чаще 1 раза в минуту."}), 429
 
     # 🧠 Генерация system prompt в зависимости от действия
     if action == "rephrase":
