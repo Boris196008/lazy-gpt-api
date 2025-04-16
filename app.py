@@ -6,22 +6,27 @@ from flask_limiter.errors import RateLimitExceeded
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+import sys  # ← для немедленного вывода логов
 
-# Загружаем .env (локально)
+# Немедленный вывод логов
+sys.stdout.reconfigure(line_buffering=True)
+
+# Загрузка переменных окружения
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Инициализация Flask
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # 🔑 важно для куки
+CORS(app, supports_credentials=True)
 
-# Функция, определяющая “ключ” пользователя для лимита
+# 🔑 Ключ для идентификации пользователя (лимит)
 def get_user_identifier():
     session_id = request.cookies.get("session_id")
     if session_id:
-        print(f"→ Лимит по session_id: {session_id}")
+        print(f"→ Лимит по session_id: {session_id}", file=sys.stdout, flush=True)
         return session_id
     ip = get_remote_address()
-    print(f"→ Лимит по IP: {ip}")
+    print(f"→ Лимит по IP: {ip}", file=sys.stdout, flush=True)
     return ip
 
 # Настройка лимитера
@@ -33,6 +38,7 @@ limiter = Limiter(
 
 @app.errorhandler(RateLimitExceeded)
 def handle_rate_limit(e):
+    print("🚫 Ограничение сработало — 429", file=sys.stdout, flush=True)
     return jsonify({"error": "🚫 Лимит: не чаще 1 раза в минуту."}), 429
 
 @app.route('/')
@@ -47,10 +53,6 @@ def ask():
 
     if not user_input:
         return jsonify({"error": "No prompt provided"}), 400
-
-    # Логируем, как нас идентифицируют
-    print("session_id:", request.cookies.get("session_id"))
-    print("remote_addr:", request.remote_addr)
 
     system_prompt = (
         "Ты — ленивый, но гениальный AI. Пользователь пишет всего одну фразу, "
