@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from flask_limiter.errors import RateLimitExceeded
 import os
 from dotenv import load_dotenv
@@ -13,30 +12,35 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app)
 
-# 🛡️ Отказ от запросов без session_id
-@app.before_request
-def reject_if_no_session():
-    if request.method == "OPTIONS":
-        return  # 🔁 Пропускаем CORS-preflight
-
-    if request.path == '/ask':
-        if not request.cookies.get("session_id"):
-            print("❌ Отклонено: нет session_id", file=sys.stdout, flush=True)
-            return jsonify({"error": "Запрос без session_id запрещён."}), 403
-
-
-# 🔑 Ключ лимита
+# 🔑 Берём session_id из тела запроса
 def get_user_identifier():
-    session_id = request.cookies.get("session_id")
-    if session_id:
-        print(f"→ Лимит по session_id: {session_id}", file=sys.stdout, flush=True)
-        return session_id
-    ip = get_remote_address()
-    print(f"→ Лимит по IP: {ip}", file=sys.stdout, flush=True)
-    return ip
+    try:
+        data = request.get_json(force=True)
+        sid = data.get("session_id")
+        if sid:
+            print(f"→ Лимит по session_id: {sid}", file=sys.stdout, flush=True)
+            return sid
+        print("❌ session_id отсутствует", file=sys.stdout, flush=True)
+        return "no-session"
+    except:
+        print("❌ Ошибка при чтении session_id", file=sys.stdout, flush=True)
+        return "error"
 
+# 💥 Блокируем запросы без session_id
+@app.before_request
+def reject_if_no_session_id():
+    if request.path == "/ask" and request.method == "POST":
+        try:
+            data = request.get_json(force=True)
+            sid = data.get("session_id")
+            if not sid:
+                return jsonify({"error": "session_id отсутствует"}), 403
+        except:
+            return jsonify({"error": "Ошибка в теле запроса"}), 403
+
+# 🔒 Лимит
 limiter = Limiter(
     key_func=get_user_identifier,
     app=app,
