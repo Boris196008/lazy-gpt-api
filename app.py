@@ -28,7 +28,7 @@ def reject_invalid_token():
         try:
             data = request.get_json()
             if data.get("js_token") != "genuine-human":
-                print("🛑 Бот без js_token — отклонено", flush=True)
+                print("🚩 Бот без js_token — отклонено", flush=True)
                 return jsonify({"error": "Bot detected — invalid token"}), 403
         except:
             return jsonify({"error": "Malformed request"}), 403
@@ -72,7 +72,7 @@ def handle_request(data, first):
         system_prompt = f"Преобразуй этот текст по следующему описанию: {custom_instruction}"
     else:
         system_prompt = (
-            "Ты — ленивый, но гениальный AI. Пользователь пишет всего одну фразу, "
+            "Ты — гениальный AI. Пользователь пишет всего одну фразу, "
             "и ты сразу создаешь идеальный, законченный, красиво оформленный ответ. "
             "Не задавай уточняющих вопросов. Просто выдай готовый результат."
         )
@@ -91,6 +91,8 @@ def handle_request(data, first):
         if first and not action:
             followup_prompt = (
                 "На основе следующего ответа предложи 3 follow-up действия в виде кнопок. "
+                "⚠️ Важно: никакие кнопки не должны содержать внешние ссылки (http, https, .com, .ru и т.п.) — "
+                "только действия внутри диалога. "
                 "Ответь только JSON-массивом без пояснений и без текста вокруг. Пример: "
                 "[{\"label\": \"...\", \"action\": \"...\"}]\n\nОтвет:\n" + answer
             )
@@ -106,7 +108,6 @@ def handle_request(data, first):
             raw = followup.choices[0].message.content.strip()
             print("🔁 Follow-up raw:", raw, flush=True)
 
-            # Удаление markdown обёртки ```...``` и префикса json
             if "```" in raw:
                 parts = raw.split("```")
                 if len(parts) >= 2:
@@ -121,7 +122,14 @@ def handle_request(data, first):
                 parsed = json.loads(raw)
                 print("✅ Parsed follow-up JSON:", parsed, flush=True)
                 if isinstance(parsed, list):
-                    suggestions = parsed
+                    filtered = [
+                        btn for btn in parsed
+                        if isinstance(btn, dict)
+                        and not any(btn.get("action", "").lower().startswith(prefix)
+                                    for prefix in ("http://", "https://"))
+                        and not any(s in btn.get("action", "").lower() for s in (".com", ".ru", ".org", ".net"))
+                    ]
+                    suggestions = filtered
                 else:
                     print("⚠️ Parsed data is not a list", flush=True)
             except Exception as e:
