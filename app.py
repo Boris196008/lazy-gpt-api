@@ -88,7 +88,7 @@ def handle_request(data, first):
         answer = response.choices[0].message.content
 
         suggestions = []
-        if not action.startswith("custom:") and not action.startswith("http"):
+        if not (isinstance(action, str) and (action.startswith("custom:") or action.startswith("http"))):
             followup_prompt = (
                 "На основе следующего ответа предложи 3 follow-up действия в виде кнопок. "
                 "⚠️ Важно: никакие кнопки не должны содержать внешние ссылки (http, https, .com, .ru и т.п.) — "
