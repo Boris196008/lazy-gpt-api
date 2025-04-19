@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import sys
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 import json
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -13,9 +12,11 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = Flask(__name__)
-CORS(app)
 
-# Лимит по session_id из cookie
+# Разрешаем запросы только с твоего фронта
+CORS(app, origins=["https://lazy-gpt-api.onrender.com"])
+
+# Ограничение по session_id из cookie
 def get_session_id():
     try:
         return request.cookies.get("session_id") or "no-session"
@@ -35,12 +36,17 @@ def reject_invalid_token():
         except:
             return jsonify({"error": "Malformed request"}), 403
 
+@app.after_request
+def log_request(response):
+    print(f"📡 IP: {request.remote_addr}, UA: {request.user_agent}, Session: {get_session_id()}, Status: {response.status_code}", flush=True)
+    return response
+
 @app.route('/')
 def index():
     return "HomeBuddy API is running. Use POST /ask."
 
 @app.route('/ask', methods=['POST'])
-@limiter.limit("1 per minute")
+@limiter.limit("3 per minute")
 def ask():
     try:
         data = request.get_json()
