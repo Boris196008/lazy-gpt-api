@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import sys
 from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import json
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -14,9 +15,10 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app = Flask(__name__)
 CORS(app)
 
+# Лимит по session_id из cookie
 def get_session_id():
     try:
-        return request.get_json().get("session_id", "no-session")
+        return request.cookies.get("session_id") or "no-session"
     except:
         return "no-session"
 
@@ -42,32 +44,26 @@ def index():
 def ask():
     try:
         data = request.get_json()
-        data["from"] = "webflow"  # пометка для адаптации
-        return handle_request(data, first=True)
+        data["from"] = "webflow"
+        return handle_request(data)
     except:
         return jsonify({"error": "Invalid JSON"}), 400
 
-def handle_request(data, first):
-    user_input = data.get("message") or data.get("prompt") or ""
+def handle_request(data):
+    user_input = data.get("message") or ""
     is_webflow = data.get("from") == "webflow"
 
     if not user_input:
-        return jsonify({"error": "No prompt provided"}), 400
+        return jsonify({"error": "No message provided"}), 400
 
-    # PROMPT: адаптирован под HomeBuddy Webflow
-    if is_webflow:
-        system_prompt = (
-            "You are HomeBuddy — a friendly, minimal AI assistant for home tasks. "
-            "Answer simply, clearly and in helpful tone. Avoid questions. No explanations. "
-            "Just deliver a final result that’s practical and easy to understand for a homemaker."
-        )
-    else:
-        system_prompt = (
-            "Ты — гениальный помощник. Пользователь пишет всего одну фразу — ты сразу выдаёшь готовый, завершённый, красиво оформленный ответ. "
-            "⚠️ Никогда не задавай уточняющих вопросов. "
-            "Ответ должен быть структурирован, легко читаем и ощущаться как финальный. "
-            "Стиль — краткий, умный, лаконичный."
-        )
+    system_prompt = (
+        "You are HomeBuddy — a friendly, minimal AI assistant for home tasks. "
+        "Answer simply, clearly and in helpful tone. Avoid questions. No explanations. "
+        "Just deliver a final result that’s practical and easy to understand for a homemaker."
+    ) if is_webflow else (
+        "Ты — гениальный помощник. Пользователь пишет всего одну фразу — ты сразу выдаёшь готовый, завершённый, красиво оформленный ответ. "
+        "⚠️ Никогда не задавай уточняющих вопросов. Ответ должен быть кратким, лаконичным и финальным."
+    )
 
     try:
         response = client.chat.completions.create(
